@@ -7,7 +7,7 @@ import { EventEmitterModule } from '@nestjs/event-emitter';
 import { UserModule } from './user/user.module';
 
 @Module({
-  providers: [PrismaService, RoomsGateway],
+  providers: [PrismaService],
   controllers: [],
   exports: [PrismaService],
   imports: [EventEmitterModule.forRoot(), RoomsModule, UserModule],

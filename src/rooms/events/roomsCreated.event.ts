@@ -1,9 +1,9 @@
-import { RoomDto } from 'src/dto/room.dto';
+import { Room } from '@prisma/client';
 
 export class RoomCreatedEvent {
-  constructor(public readonly room: RoomDto) {}
+  constructor(public readonly room: Room) {}
 }
 
 export class RoomUpdatedEvent {
-  constructor(public readonly room: RoomDto) {}
+  constructor(public readonly room: Room) {}
 }

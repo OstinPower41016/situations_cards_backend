@@ -8,22 +8,31 @@ datasource db {
 }
 
 enum RoomStatus {
-  PENDING
-  ACTIVE
-  INACTIVE
+  PENDING  @map("PENDING")
+  ACTIVE   @map("ACTIVE")
+  INACTIVE @map("INACTIVE")
 }
 
-model rooms {
+enum UserStatus {
+  OFFLINE @map("OFFLINE")
+  ONLINE  @map("ONLINE")
+  PENDING @map("PENDING")
+  READY   @map("READY")
+}
+
+model Room {
   id           String     @id @default(auto()) @map("_id") @db.ObjectId
   name         String
   private      Boolean    @default(false)
-  participants String[]   @default([])
+  participants User[]
   status       RoomStatus @default(PENDING)
 }
 
-model users {
-  id       String @id @default(auto()) @map("_id") @db.ObjectId
-  nickname String @unique
-  password String?
-  guest    Boolean @default(false)
+model User {
+  id       String     @id @default(auto()) @map("_id") @db.ObjectId
+  nickname String     @unique
+  guest    Boolean    @default(false)
+  status   UserStatus @default(ONLINE)
+  room     Room?      @relation(fields: [roomId], references: [id])
+  roomId   String?    @db.ObjectId
 }

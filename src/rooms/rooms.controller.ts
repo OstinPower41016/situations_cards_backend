@@ -9,11 +9,11 @@ import {
   Res,
 } from '@nestjs/common';
 import { RoomsService } from './rooms.service';
-import { RoomCreateDto } from 'src/dto/room.dto';
 import { Response, Request } from 'express';
 import { request } from 'http';
+import { IRoomCreateDto } from 'src/dto/room.dto';
 
-@Controller('rooms')
+@Controller('room')
 export class RoomsController {
   constructor(private readonly roomsService: RoomsService) {}
 
@@ -21,7 +21,7 @@ export class RoomsController {
   async createRoom(
     @Req() request: Request,
     @Res() response: Response,
-    @Body() body: RoomCreateDto,
+    @Body() body: IRoomCreateDto,
   ) {
     return this.roomsService.create(request, body);
   }

@@ -1,7 +1,7 @@
 import { Body, Controller, Get, Patch, Req, Res } from '@nestjs/common';
 import { UserService } from './user.service';
 import { Request, Response } from 'express';
-import { UserUpdateDto } from 'src/dto/user.dto';
+import { IUserUpdateDto } from 'src/dto/user.dto';
 
 @Controller('user')
 export class UserController {
@@ -17,9 +17,10 @@ export class UserController {
   async updateUserNickname(
     @Req() request: Request,
     @Res() response: Response,
-    @Body() body: UserUpdateDto,
+    @Body() body: IUserUpdateDto,
   ) {
-    const updatedUser = await this.userService.updateUser(request, body);
+    const _id = request.cookies['_id'];
+    const updatedUser = await this.userService.updateUser(_id, body);
     response.json(updatedUser);
   }
 }

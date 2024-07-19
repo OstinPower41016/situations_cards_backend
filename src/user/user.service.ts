@@ -4,10 +4,11 @@ import {
   InternalServerErrorException,
   Req,
 } from '@nestjs/common';
-import { throws } from 'assert';
+import { EventEmitter2 } from '@nestjs/event-emitter';
+import { User } from '@prisma/client';
 import { Request, Response } from 'express';
-import { UserDto } from 'src/dto/user.dto';
 import { PrismaService } from 'src/prisma/prisma.service';
+// import { RoomsService } from 'src/rooms/rooms.service';
 import {
   uniqueUsernameGenerator,
   nouns,
@@ -16,40 +17,91 @@ import {
 
 @Injectable()
 export class UserService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private eventEmitter: EventEmitter2,
+  ) {}
 
-  async getUserMe(request: Request, response: Response) {
+  async getUserMe(request: Request, response: Response): Promise<User> {
     const _id = request.cookies['_id'];
 
-    if (_id) {
-      const user = await this.getUserById(_id);
-
-      return user;
-    } else {
+    const createNewUser = async () => {
       const newUser = await this.createGuest();
       response.cookie('_id', newUser.id, {
         httpOnly: true,
         secure: false,
       });
       return newUser;
+    };
+
+    if (_id) {
+      const user = await this.getUserById(_id);
+
+      if (!user) {
+        const newUser = await createNewUser();
+        return newUser;
+      }
+
+      return user;
+    } else {
+      const newUser = await createNewUser();
+      return newUser;
     }
   }
 
-  async updateUser(request: Request, data: Partial<UserDto>) {
-    const _id = request.cookies['_id'];
-
-    if (_id) {
+  async updateUser(userId: string, data: Partial<User>): Promise<User> {
+    if (userId) {
       try {
-        const updatedUser = await this.prisma.users.update({
-          where: { id: _id },
-          data: {
-            ...data,
-          },
-          select: {
-            guest: true,
-            id: true,
-            nickname: true,
-          },
+        const updatedUser = await this.prisma.$transaction(async (prisma) => {
+          const currentUser = await prisma.user.findUnique({
+            where: { id: userId },
+            include: { room: true },
+          });
+
+          if (!currentUser) {
+            throw new InternalServerErrorException('User not found');
+          }
+
+          const updatedUser = await prisma.user.update({
+            where: { id: userId },
+            data: data,
+            select: {
+              guest: true,
+              id: true,
+              nickname: true,
+              status: true,
+              room: true,
+              roomId: true,
+            },
+          });
+
+          if (currentUser.room) {
+            if (
+              updatedUser.status === 'OFFLINE' &&
+              currentUser.room.status !== 'ACTIVE'
+            ) {
+              this.eventEmitter.emit('removeUserFromRoomIfExist', {
+                userId: currentUser.id,
+              });
+            }
+
+            const participants = await prisma.user.findMany({
+              where: { roomId: currentUser.room.id },
+            });
+
+            await prisma.room.update({
+              where: { id: currentUser.room.id },
+              data: {
+                participants: {
+                  set: participants.map((p) => ({ id: p.id })),
+                },
+              },
+            });
+
+            this.eventEmitter.emit('room.updated');
+          }
+
+          return updatedUser;
         });
 
         return updatedUser;
@@ -65,23 +117,26 @@ export class UserService {
     }
   }
 
-  private async getUserById(id: string) {
-    const user = await this.prisma.users.findFirst({
+  async getUserById(id: string): Promise<User> {
+    const user = await this.prisma.user.findFirst({
       where: {
         id: id,
       },
       select: {
-        guest: true,
         id: true,
         nickname: true,
+        status: true,
+        guest: true,
+        room: true,
+        roomId: true,
       },
     });
 
     return user;
   }
 
-  private async createGuest() {
-    const newUser = this.prisma.users.create({
+  private async createGuest(): Promise<User> {
+    const newUser = this.prisma.user.create({
       data: {
         nickname: uniqueUsernameGenerator({
           dictionaries: [nouns, adjectives],
@@ -92,6 +147,9 @@ export class UserService {
         guest: true,
         id: true,
         nickname: true,
+        status: true,
+        room: true,
+        roomId: true,
       },
     });
 
