@@ -7,16 +7,23 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum RoomStatus {
+  PENDING
+  ACTIVE
+  INACTIVE
+}
+
 model rooms {
-  id String @id @default(auto()) @map("_id") @db.ObjectId
-  name String
-  private      Boolean @default(false)
-  participants String[] @default([])
+  id           String     @id @default(auto()) @map("_id") @db.ObjectId
+  name         String
+  private      Boolean    @default(false)
+  participants String[]   @default([])
+  status       RoomStatus @default(PENDING)
 }
 
 model users {
-  id String @id @default(auto()) @map("_id") @db.ObjectId
+  id       String @id @default(auto()) @map("_id") @db.ObjectId
   nickname String @unique
   password String?
-  guest Boolean @default(false)
+  guest    Boolean @default(false)
 }
