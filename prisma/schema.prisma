@@ -22,7 +22,7 @@ enum UserStatus {
 
 model Room {
   id           String     @id @default(auto()) @map("_id") @db.ObjectId
-  name         String
+  name         String     @unique
   private      Boolean    @default(false)
   participants User[]
   status       RoomStatus @default(PENDING)

@@ -1,5 +1,5 @@
 // src/rooms/rooms.service.ts
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Room } from '@prisma/client';
@@ -60,8 +60,11 @@ export class RoomsService {
       this.eventEmitter.emit('room.created');
       return createdRoom;
     } catch (error) {
-      console.error('Error creating room:', error);
-      throw error;
+      if (error.code === 'P2002') {
+        throw new ConflictException('Комната с таким названием уже существует');
+      } else {
+        throw error;
+      }
     }
   }
 
@@ -104,43 +107,29 @@ export class RoomsService {
 
   async removeUserFromRoom(args: { roomId: string; userId: string }) {
     try {
-      const currentRoom = await this.prisma.room.findFirst({
+      const updatedRoom = await this.prisma.room.update({
         where: { id: args.roomId },
-        include: {
+        data: {
           participants: {
-            select: {
-              guest: true,
-              id: true,
-              nickname: true,
-              room: true,
-              status: true,
+            disconnect: {
+              id: args.userId,
             },
           },
         },
+        include: {
+          participants: true,
+        },
       });
 
-      if (currentRoom.participants.length === 0) {
+      if (updatedRoom.participants.length === 0) {
         await this.prisma.room.delete({
           where: { id: args.roomId },
         });
-
-        this.eventEmitter.emit('room.updated');
-      } else {
-        const updatedRoom = await this.prisma.room.update({
-          where: { id: args.roomId },
-          data: {
-            participants: {
-              disconnect: {
-                id: args.userId,
-              },
-            },
-          },
-        });
-
-        this.eventEmitter.emit('room.updated');
-
-        return updatedRoom;
       }
+
+      this.eventEmitter.emit('room.updated');
+
+      return updatedRoom;
     } catch (error) {
       throw error;
     }
