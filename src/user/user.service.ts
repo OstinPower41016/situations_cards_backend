@@ -8,7 +8,6 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { User } from '@prisma/client';
 import { Request, Response } from 'express';
 import { PrismaService } from 'src/prisma/prisma.service';
-// import { RoomsService } from 'src/rooms/rooms.service';
 import {
   uniqueUsernameGenerator,
   nouns,
@@ -72,13 +71,15 @@ export class UserService {
               status: true,
               room: true,
               roomId: true,
+              createdAt: true,
+              updatedAt: true,
             },
           });
 
           if (currentUser.room) {
             if (
               updatedUser.status === 'OFFLINE' &&
-              currentUser.room.status !== 'ACTIVE'
+              currentUser.room.status !== 'IN_GAME'
             ) {
               this.eventEmitter.emit('removeUserFromRoomIfExist', {
                 userId: currentUser.id,
@@ -89,16 +90,19 @@ export class UserService {
               where: { roomId: currentUser.room.id },
             });
 
-            await prisma.room.update({
+            const updatedRoom = await prisma.room.update({
               where: { id: currentUser.room.id },
               data: {
                 participants: {
                   set: participants.map((p) => ({ id: p.id })),
                 },
               },
+              include: {
+                participants: true,
+              },
             });
 
-            this.eventEmitter.emit('room.updated');
+            this.eventEmitter.emit('room.updated', updatedRoom);
           }
 
           return updatedUser;
@@ -129,6 +133,8 @@ export class UserService {
         guest: true,
         room: true,
         roomId: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
 
@@ -150,6 +156,8 @@ export class UserService {
         status: true,
         room: true,
         roomId: true,
+        createdAt: true,
+        updatedAt: true,
       },
     });
 

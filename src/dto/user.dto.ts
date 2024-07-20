@@ -1,3 +1,3 @@
 import { User } from '@prisma/client';
 
-export interface IUserUpdateDto extends Pick<User, 'nickname'> {}
+export interface IUserUpdateDto extends Pick<User, 'nickname' | 'status'> {}

@@ -45,6 +45,14 @@ export class RoomsGateway implements OnGatewayInit, OnGatewayDisconnect {
     client.emit('rooms', rooms);
   }
 
+  @SubscribeMessage('room')
+  async getRoom(client: Socket, data: { roomId: string }) {
+    if (data.roomId) {
+      const room = await this.roomService.getById({ roomId: data.roomId });
+      client.emit(`room/${data.roomId}`, room);
+    }
+  }
+
   @OnEvent('room.created')
   async handleRoomCreated(event: RoomCreatedEvent) {
     const rooms = await this.prisma.room.findMany({
@@ -55,13 +63,17 @@ export class RoomsGateway implements OnGatewayInit, OnGatewayDisconnect {
     this.server.emit('rooms', rooms);
   }
 
-  @OnEvent('room.updated')
-  async handleUpdatedRoom(event: RoomUpdatedEvent) {
+  @OnEvent('room.updated') // TODO
+  async handleUpdatedRoom(event: any) {
     const rooms = await this.prisma.room.findMany({
       include: {
         participants: true,
       },
     });
     this.server.emit('rooms', rooms);
+
+    if (event) {
+      this.server.emit(`room/${event.id}`, event);
+    }
   }
 }

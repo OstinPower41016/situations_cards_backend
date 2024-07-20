@@ -3,10 +3,6 @@ import { ConflictException, Injectable } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
 import { PrismaService } from 'src/prisma/prisma.service';
 import { Room } from '@prisma/client';
-import {
-  RoomCreatedEvent,
-  RoomUpdatedEvent,
-} from './events/roomsCreated.event';
 import { Request } from 'express';
 import { IRoomCreateDto } from 'src/dto/room.dto';
 import { UserService } from 'src/user/user.service';
@@ -40,6 +36,17 @@ export class RoomsService {
     }
   }
 
+  async getById(args: { roomId: string }) {
+    const room = this.prisma.room.findFirst({
+      where: { id: args.roomId },
+      include: {
+        participants: true,
+      },
+    });
+
+    return room;
+  }
+
   async create(request: Request, data: IRoomCreateDto): Promise<Room> {
     try {
       const currentUserId = request.cookies['_id'];
@@ -53,7 +60,9 @@ export class RoomsService {
           participants: {
             connect: { id: currentUserId },
           },
-          status: 'PENDING',
+          currentLeaderId: currentUserId,
+          selectedQuestionId: null,
+          status: 'CREATED',
         },
       });
 
@@ -70,23 +79,7 @@ export class RoomsService {
 
   async addUserToRoom(args: { roomId: string; userId: string }) {
     try {
-      const currentRoom = await this.prisma.room.findFirst({
-        where: { id: args.roomId },
-        include: {
-          participants: {
-            select: {
-              guest: true,
-              id: true,
-              nickname: true,
-              room: true,
-              status: true,
-            },
-          },
-        },
-      });
-
       await this.removeUserFromRoomIfExist({ userId: args.userId });
-      const currentUser = await this.userService.getUserById(args.userId);
 
       const updatedRoom = await this.prisma.room.update({
         where: { id: args.roomId },
@@ -95,9 +88,12 @@ export class RoomsService {
             connect: { id: args.userId },
           },
         },
+        include: {
+          participants: true,
+        },
       });
 
-      this.eventEmitter.emit('room.updated');
+      this.eventEmitter.emit('room.updated', updatedRoom);
 
       return updatedRoom;
     } catch (error) {
@@ -107,6 +103,25 @@ export class RoomsService {
 
   async removeUserFromRoom(args: { roomId: string; userId: string }) {
     try {
+      const currentRoom = await this.prisma.room.findFirst({
+        where: { id: args.roomId },
+        include: {
+          participants: true,
+        },
+      });
+
+      if (
+        currentRoom.participants?.[0].id === args.userId &&
+        currentRoom.participants.length > 1
+      ) {
+        await this.prisma.room.update({
+          where: { id: args.roomId },
+          data: {
+            currentLeaderId: currentRoom.participants[1].id,
+          },
+        });
+      }
+
       const updatedRoom = await this.prisma.room.update({
         where: { id: args.roomId },
         data: {
@@ -128,6 +143,7 @@ export class RoomsService {
       }
 
       this.eventEmitter.emit('room.updated');
+      this.eventEmitter.emit('rom.updated', updatedRoom);
 
       return updatedRoom;
     } catch (error) {
