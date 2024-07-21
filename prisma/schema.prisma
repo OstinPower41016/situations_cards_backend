@@ -3,64 +3,104 @@ generator client {
 }
 
 datasource db {
-  provider = "mongodb"
+  provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
 enum RoomStatus {
-  CREATED        @map("CREATED")
-  READY_TO_START @map("READY_TO_START")
-  IN_GAME        @map("IN_GAME")
-  INACTIVE       @map("INACTIVE")
+  CREATED
+  READY_TO_START
+  IN_GAME
+  INACTIVE
 }
 
 enum UserStatus {
-  OFFLINE                  @map("OFFLINE")
-  ONLINE                   @map("ONLINE")
-  READY_TO_START           @map("READY_TO_START")
-  THINKING                 @map("THINKING")
-  REAREADY_OTHER_PLAYERSDY @map("READY_OTHER_PLAYERS")
+  OFFLINE
+  ONLINE
+  IN_LOBBY
+  PLAYING
+}
+
+enum RoomParticipantStatus {
+  THINKING
+  WAITING
 }
 
 model Room {
-  id                 String     @id @default(auto()) @map("_id") @db.ObjectId
-  name               String     @unique
-  private            Boolean    @default(false)
-  participants       User[]
-  status             RoomStatus @default(CREATED)
-  currentLeaderId    String     @db.ObjectId
-  leaderQuestions    Question[]
-  selectedQuestionId String?    @db.ObjectId
-  selectedAnswers    Card[]
-  createdAt          DateTime   @default(now())
-  updatedAt          DateTime   @updatedAt
+  id           String     @id @default(uuid())
+  name         String     @unique
+  private      Boolean    @default(false)
+  status       RoomStatus @default(CREATED)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  participants User[]
+
+  @@map("rooms")
 }
 
 model User {
-  id        String     @id @default(auto()) @map("_id") @db.ObjectId
-  nickname  String     @unique
-  guest     Boolean    @default(false)
-  status    UserStatus @default(ONLINE)
-  room      Room?      @relation(fields: [roomId], references: [id])
-  roomId    String?    @db.ObjectId
-  cards     Card[]
-  createdAt DateTime   @default(now())
-  updatedAt DateTime   @updatedAt
+  id         String     @id @default(uuid())
+  nickname   String     @unique
+  guest      Boolean    @default(false)
+  status     UserStatus @default(ONLINE)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  room       Room?      @relation(fields: [roomId], references: [id])
+  roomId     String?
+  userGame   UserGame?
+  userGameId String?    @unique
+  isLeader   Boolean    @default(false)
+
+  @@map("users")
 }
 
-model Card {
-  id          String  @id @default(auto()) @map("_id") @db.ObjectId
+model UserGame {
+  id    String @id @default(uuid())
+  score Int    @default(0)
+
+  user   User   @relation(fields: [userId], references: [id])
+  userId String @unique
+
+  answers   UserGameAnswer[]
+  questions UserGameQuestion[]
+
+  @@map("user_games")
+}
+
+model Answer {
+  id          String           @id @default(uuid())
   description String
-  Room        Room?   @relation(fields: [roomId], references: [id])
-  roomId      String? @db.ObjectId
-  User        User?   @relation(fields: [userId], references: [id])
-  userId      String? @db.ObjectId
+  games       UserGameAnswer[]
+
+  @@map("answers")
 }
 
 model Question {
-  id          String @id @default(auto()) @map("_id") @db.ObjectId
+  id          String             @id @default(uuid())
   description String
+  games       UserGameQuestion[]
 
-  Room   Room?   @relation(fields: [roomId], references: [id])
-  roomId String? @db.ObjectId
+  @@map("questions")
+}
+
+model UserGameAnswer {
+  answerId   String
+  userGameId String
+
+  answer   Answer   @relation(fields: [answerId], references: [id])
+  userGame UserGame @relation(fields: [userGameId], references: [id])
+
+  @@id([answerId, userGameId])
+  @@map("user_game_answers")
+}
+
+model UserGameQuestion {
+  questionId String
+  userGameId String
+
+  question Question @relation(fields: [questionId], references: [id])
+  userGame UserGame @relation(fields: [userGameId], references: [id])
+
+  @@id([questionId, userGameId])
+  @@map("user_game_questions")
 }

@@ -23,7 +23,8 @@ export class RoomsController {
     @Res() response: Response,
     @Body() body: IRoomCreateDto,
   ) {
-    return this.roomsService.create(request, body);
+    const room = await this.roomsService.create(request, body);
+    return room;
   }
 
   @Patch(':roomId/add-user')
@@ -33,7 +34,10 @@ export class RoomsController {
     @Param('roomId') roomId: string,
   ) {
     const userId = request.cookies['_id'];
-    const updatedRoom = this.roomsService.addUserToRoom({ roomId, userId });
+    const updatedRoom = await this.roomsService.addUserToRoom({
+      roomId,
+      userId,
+    });
 
     response.json(updatedRoom);
   }
@@ -45,7 +49,7 @@ export class RoomsController {
     @Param('roomId') roomId: string,
   ) {
     const userId = request.cookies['_id'];
-    const updatedRoom = this.roomsService.removeUserFromRoom({
+    const updatedRoom = await this.roomsService.removeUserFromRoom({
       roomId,
       userId,
     });

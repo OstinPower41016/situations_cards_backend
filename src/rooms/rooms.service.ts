@@ -17,19 +17,7 @@ export class RoomsService {
 
   async getAll(): Promise<Room[]> {
     try {
-      const allRooms = await this.prisma.room.findMany({
-        include: {
-          participants: {
-            select: {
-              guest: true,
-              id: true,
-              nickname: true,
-              room: true,
-              status: true,
-            },
-          },
-        },
-      });
+      const allRooms = await this.prisma.room.findMany();
       return allRooms;
     } catch (error) {
       throw error;
@@ -39,9 +27,6 @@ export class RoomsService {
   async getById(args: { roomId: string }) {
     const room = this.prisma.room.findFirst({
       where: { id: args.roomId },
-      include: {
-        participants: true,
-      },
     });
 
     return room;
@@ -57,11 +42,6 @@ export class RoomsService {
         data: {
           name: data.name,
           private: data.private,
-          participants: {
-            connect: { id: currentUserId },
-          },
-          currentLeaderId: currentUserId,
-          selectedQuestionId: null,
           status: 'CREATED',
         },
       });
@@ -110,16 +90,22 @@ export class RoomsService {
         },
       });
 
-      if (
-        currentRoom.participants?.[0].id === args.userId &&
-        currentRoom.participants.length > 1
-      ) {
-        await this.prisma.room.update({
-          where: { id: args.roomId },
+      if (currentRoom.participants?.[0].id === args.userId) {
+        await this.prisma.user.update({
+          where: { id: args.userId },
           data: {
-            currentLeaderId: currentRoom.participants[1].id,
+            isLeader: false,
           },
         });
+
+        if (currentRoom.participants.length > 1) {
+          await this.prisma.user.update({
+            where: { id: currentRoom.participants[1].id },
+            data: {
+              isLeader: true,
+            },
+          });
+        }
       }
 
       const updatedRoom = await this.prisma.room.update({

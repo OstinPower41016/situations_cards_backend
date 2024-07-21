@@ -5,7 +5,7 @@ import {
   Req,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { User } from '@prisma/client';
+import { RoomStatus, User } from '@prisma/client';
 import { Request, Response } from 'express';
 import { PrismaService } from 'src/prisma/prisma.service';
 import {
@@ -64,16 +64,6 @@ export class UserService {
           const updatedUser = await prisma.user.update({
             where: { id: userId },
             data: data,
-            select: {
-              guest: true,
-              id: true,
-              nickname: true,
-              status: true,
-              room: true,
-              roomId: true,
-              createdAt: true,
-              updatedAt: true,
-            },
           });
 
           if (currentUser.room) {
@@ -89,6 +79,8 @@ export class UserService {
             const participants = await prisma.user.findMany({
               where: { roomId: currentUser.room.id },
             });
+
+            await this.checkAndUpdateRoomStatus({ roomId: currentUser.roomId });
 
             const updatedRoom = await prisma.room.update({
               where: { id: currentUser.room.id },
@@ -126,19 +118,41 @@ export class UserService {
       where: {
         id: id,
       },
-      select: {
-        id: true,
-        nickname: true,
-        status: true,
-        guest: true,
-        room: true,
-        roomId: true,
-        createdAt: true,
-        updatedAt: true,
-      },
     });
 
     return user;
+  }
+
+  private async checkAndUpdateRoomStatus(args: { roomId: string }) {
+    const currentRoom = await this.prisma.room.findFirst({
+      where: { id: args.roomId },
+      include: {
+        participants: true,
+      },
+    });
+
+    const usersInLobbyCount = currentRoom.participants.filter(
+      (user) => user.status === 'IN_LOBBY',
+    ).length;
+
+    let currentRoomStatus = currentRoom.status;
+
+    if (currentRoomStatus === 'CREATED' && usersInLobbyCount >= 3) {
+      currentRoomStatus = 'READY_TO_START';
+    }
+
+    if (currentRoomStatus === 'READY_TO_START' && usersInLobbyCount < 3) {
+      currentRoomStatus = 'CREATED';
+    }
+
+    if (currentRoomStatus !== currentRoom.status) {
+      await this.prisma.room.update({
+        where: { id: args.roomId },
+        data: {
+          status: currentRoomStatus,
+        },
+      });
+    }
   }
 
   private async createGuest(): Promise<User> {
@@ -148,16 +162,6 @@ export class UserService {
           dictionaries: [nouns, adjectives],
         }),
         guest: true,
-      },
-      select: {
-        guest: true,
-        id: true,
-        nickname: true,
-        status: true,
-        room: true,
-        roomId: true,
-        createdAt: true,
-        updatedAt: true,
       },
     });
 
