@@ -1,11 +1,7 @@
-// src/rooms/rooms.service.ts
 import { ConflictException, Injectable } from '@nestjs/common';
 import { EventEmitter2, OnEvent } from '@nestjs/event-emitter';
-import { PrismaService } from 'src/prisma/prisma.service';
-import { Room } from '@prisma/client';
 import { Request } from 'express';
 import { IRoomCreateDto } from 'src/dto/room.dto';
-import { UserService } from 'src/user/user.service';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RoomEntity } from './entity/room.entity';
 import { UserEntity, UserStatus } from 'src/user/entities/user.entity';

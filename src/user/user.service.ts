@@ -8,7 +8,6 @@ import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RoomStatus, User } from '@prisma/client';
 import { Request, Response } from 'express';
-import { PrismaService } from 'src/prisma/prisma.service';
 import {
   uniqueUsernameGenerator,
   nouns,
@@ -51,7 +50,6 @@ export class UserService {
       return newUser;
     }
   }
-
 
   async updateUser(userId: string, data: UserEntity) {
     if (userId) {
