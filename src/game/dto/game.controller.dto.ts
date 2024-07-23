@@ -1,6 +1,14 @@
 import { IsString, IsUUID } from 'class-validator';
 
-export class CreateGameDto {
+export class CreateGameBodyDto {
+  @IsUUID()
+  readonly roomId: string;
+}
+
+export class UpdateGameSelectQuestion {
+  @IsUUID()
+  readonly questionId: string;
+
   @IsUUID()
   readonly roomId: string;
 }

@@ -10,11 +10,7 @@ import {
 import { UserEntity } from './user.entity';
 import { GameEntity } from 'src/game/entities/game.entity';
 import { CustomBaseEntity } from 'src/entities/base.entity';
-
-enum GameUserStatus {
-  'THINKING' = 'THINKING',
-  'READY' = 'READY',
-}
+import { GameUserStatus } from 'db/allTypes';
 
 @Entity('users_games')
 export class UserGameEntity extends CustomBaseEntity {
@@ -36,7 +32,7 @@ export class UserGameEntity extends CustomBaseEntity {
   @Column({
     type: 'enum',
     enum: GameUserStatus,
-    default: GameUserStatus.THINKING,
+    default: GameUserStatus.WAITING,
   })
   status: GameUserStatus;
 }

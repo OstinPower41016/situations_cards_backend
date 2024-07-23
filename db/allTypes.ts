@@ -19,7 +19,9 @@ export enum GameStage {
 }
 
 export enum GameUserStatus {
-  'THINKING' = 'THINKING',
+  'CHOOSING_QUESTION' = 'CHOOSING_QUESTION',
+  'CHOOSING_ANSWER' = 'CHOOSING_ANSWER',
+  'WAITING' = 'WAITING',
   'READY' = 'READY',
 }
 

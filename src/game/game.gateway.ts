@@ -18,11 +18,13 @@ export class GameGateway {
 
   constructor(private readonly gameService: GameService) {}
 
-  @SubscribeMessage('getGame')
-  async handleUserInRoomUpdated(client: Socket, data: { gameId: string }) {
-    if (data.gameId) {
+  @OnEvent('game.created')
+  @OnEvent('game.updated')
+  @SubscribeMessage('joinGame')
+  async handleUserInRoomUpdated(client: Socket, payload: { gameId: string }) {
+    if (payload.gameId) {
       const game = await this.gameService.getCommonFieldsGameById({
-        gameId: data.gameId,
+        gameId: payload.gameId,
       });
 
       this.server.emit(`game/${game.id}`, new GameCommonFieldsDto(game));
@@ -32,7 +34,8 @@ export class GameGateway {
   }
 
   @OnEvent('userGame.created')
-  @SubscribeMessage('getUserGame')
+  @OnEvent('userGame.updated')
+  @SubscribeMessage('joinUserToGame')
   async getUserGame(client: Socket) {
     const cookies = client.handshake.headers.cookie;
     const parsedCookies = cookies ? cookie.parse(cookies) : {};
@@ -42,6 +45,8 @@ export class GameGateway {
       userId: userId,
     });
 
-    this.server.emit(`game/userGame/${userId}`, new UserGameDto(userGame));
+    if (userGame) {
+      this.server.emit(`game/userGame/${userId}`, new UserGameDto(userGame));
+    }
   }
 }

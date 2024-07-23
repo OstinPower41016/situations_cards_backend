@@ -1,7 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RoomsService } from 'src/rooms/rooms.service';
-import { GameEntity } from './entities/game.entity';
+import { GameEntity, GameStage } from './entities/game.entity';
 import { AnswerEntity } from 'src/entities/answer.entity';
 import { QuestionEntity } from 'src/entities/question.entity';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
@@ -12,6 +12,7 @@ import getRandomElements from './utils/getRandomElements';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { UserGameEntity } from 'src/user/entities/userGame.entity';
 import { UserEntity } from 'src/user/entities/user.entity';
+import { GameUserStatus } from 'db/allTypes';
 
 @Injectable()
 export class GameService {
@@ -54,23 +55,15 @@ export class GameService {
 
       const isLeader = room.users[0].id === user.id;
 
-      const questions = await this.cacheManager.get<QuestionEntity[]>(
-        getQuestionsStorageCacheKey(room.id),
-      );
-      const randomQuestions: QuestionEntity[] = getRandomElements(questions, 3);
-      const randomQuestionsIds = randomQuestions.map((question) => question.id);
-      const questionsWithoutSelected = questions.filter(
-        (question) => !randomQuestionsIds.includes(question.id),
-      );
-      await this.cacheManager.set(
-        getQuestionsStorageCacheKey(args.roomId),
-        questionsWithoutSelected,
-      );
+      const randomQuestions = await this.getRandomRoomGameQuestions({
+        roomId: args.roomId,
+      });
 
       game.questions = randomQuestions;
 
       if (isLeader) {
         userGame.isLeader = true;
+        userGame.status = GameUserStatus.CHOOSING_QUESTION;
       } else {
         const answers = await this.cacheManager.get<AnswerEntity[]>(
           getAnswersStorageCacheKey(room.id),
@@ -94,6 +87,7 @@ export class GameService {
     const newGame = await game.save();
     room.game = newGame;
     await room.save();
+    this.eventEmutter.emit('game.created', { gameId: newGame.id });
   }
 
   async getCommonFieldsGameById(args: { gameId: string }) {
@@ -112,5 +106,60 @@ export class GameService {
     });
 
     return userGame;
+  }
+
+  async selectQuestion(args: {
+    questionId: string;
+    roomId: string;
+    userId: string;
+  }) {
+    const questions = await this.cacheManager.get<QuestionEntity[]>(
+      getQuestionsStorageCacheKey(args.roomId),
+    );
+    const question = questions.find(
+      (question) => question.id === args.questionId,
+    );
+
+    const currentGame = await this.gameRepository.findOne({
+      where: {
+        room: {
+          id: args.roomId,
+        },
+      },
+      relations: ['usersGame'],
+    });
+
+    currentGame.selectedQuestion = question;
+    currentGame.stage = GameStage.SELECT_ANSWERS;
+
+    for (const userGame of currentGame.usersGame) {
+      if (userGame.isLeader) {
+        userGame.status = GameUserStatus.WAITING;
+      } else {
+        userGame.status = GameUserStatus.CHOOSING_ANSWER;
+      }
+    }
+
+    await currentGame.save();
+
+    this.eventEmutter.emit('game.updated', { gameId: currentGame.id });
+    this.eventEmutter.emit('userGame.updated');
+  }
+
+  private async getRandomRoomGameQuestions(args: { roomId: string }) {
+    const questions = await this.cacheManager.get<QuestionEntity[]>(
+      getQuestionsStorageCacheKey(args.roomId),
+    );
+    const randomQuestions: QuestionEntity[] = getRandomElements(questions, 3);
+    const randomQuestionsIds = randomQuestions.map((question) => question.id);
+    const questionsWithoutSelected = questions.filter(
+      (question) => !randomQuestionsIds.includes(question.id),
+    );
+    await this.cacheManager.set(
+      getQuestionsStorageCacheKey(args.roomId),
+      questionsWithoutSelected,
+    );
+
+    return randomQuestions;
   }
 }
