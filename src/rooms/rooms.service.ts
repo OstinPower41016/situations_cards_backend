@@ -6,48 +6,59 @@ import { Room } from '@prisma/client';
 import { Request } from 'express';
 import { IRoomCreateDto } from 'src/dto/room.dto';
 import { UserService } from 'src/user/user.service';
+import { InjectRepository } from '@nestjs/typeorm';
+import { RoomEntity } from './entity/room.entity';
+import { UserEntity, UserStatus } from 'src/user/entities/user.entity';
 
 @Injectable()
 export class RoomsService {
   constructor(
-    private prisma: PrismaService,
+    @InjectRepository(RoomEntity)
+    private readonly roomRepository: typeof RoomEntity,
     private eventEmitter: EventEmitter2,
-    private readonly userService: UserService,
+    @InjectRepository(UserEntity)
+    private readonly userRepository: typeof UserEntity,
   ) {}
 
-  async getAll(): Promise<Room[]> {
+  async getAll() {
     try {
-      const allRooms = await this.prisma.room.findMany();
-      return allRooms;
+      const rooms = await this.roomRepository.find({
+        relations: {
+          users: true,
+        },
+      });
+      return rooms;
     } catch (error) {
       throw error;
     }
   }
 
   async getById(args: { roomId: string }) {
-    const room = this.prisma.room.findFirst({
+    const room = await this.roomRepository.findOne({
       where: { id: args.roomId },
+      relations: ['users', 'game', 'game.usersGame'],
     });
 
     return room;
   }
 
-  async create(request: Request, data: IRoomCreateDto): Promise<Room> {
+  async create(request: Request, data: IRoomCreateDto) {
     try {
       const currentUserId = request.cookies['_id'];
+      const user = await this.userRepository.findOneBy({ id: currentUserId });
 
       await this.removeUserFromRoomIfExist({ userId: currentUserId });
 
-      const createdRoom = await this.prisma.room.create({
-        data: {
-          name: data.name,
-          private: data.private,
-          status: 'CREATED',
-        },
-      });
+      const newRoom = new RoomEntity();
+
+      newRoom.name = data.name;
+      newRoom.private = data.private;
+      newRoom.users = [user];
+
+      const room = await newRoom.save();
 
       this.eventEmitter.emit('room.created');
-      return createdRoom;
+      return room;
     } catch (error) {
       if (error.code === 'P2002') {
         throw new ConflictException('Комната с таким названием уже существует');
@@ -61,17 +72,15 @@ export class RoomsService {
     try {
       await this.removeUserFromRoomIfExist({ userId: args.userId });
 
-      const updatedRoom = await this.prisma.room.update({
+      const room = await this.roomRepository.findOne({
         where: { id: args.roomId },
-        data: {
-          participants: {
-            connect: { id: args.userId },
-          },
-        },
-        include: {
-          participants: true,
-        },
+        relations: ['users'],
       });
+      const user = await this.userRepository.findOneBy({ id: args.userId });
+
+      room.users.push(user);
+
+      const updatedRoom = await room.save();
 
       this.eventEmitter.emit('room.updated', updatedRoom);
 
@@ -82,76 +91,47 @@ export class RoomsService {
   }
 
   async removeUserFromRoom(args: { roomId: string; userId: string }) {
-    try {
-      const currentRoom = await this.prisma.room.findFirst({
-        where: { id: args.roomId },
-        include: {
-          participants: true,
-        },
-      });
+    const room = await this.roomRepository.findOne({
+      where: { id: args.roomId },
+      relations: {
+        users: true,
+      },
+    });
+    const currentUserIdx = room.users?.findIndex(
+      (user) => user.id === args.userId,
+    );
 
-      if (currentRoom.participants?.[0].id === args.userId) {
-        await this.prisma.user.update({
-          where: { id: args.userId },
-          data: {
-            isLeader: false,
-          },
-        });
+    const user = await this.userRepository.findOneBy({ id: args.userId });
+    user.status =
+      user.status === UserStatus.IN_LOBBY ? UserStatus.ONLINE : user.status;
+    await user.save();
 
-        if (currentRoom.participants.length > 1) {
-          await this.prisma.user.update({
-            where: { id: currentRoom.participants[1].id },
-            data: {
-              isLeader: true,
-            },
-          });
-        }
-      }
+    let updatedRoom: RoomEntity;
 
-      const updatedRoom = await this.prisma.room.update({
-        where: { id: args.roomId },
-        data: {
-          participants: {
-            disconnect: {
-              id: args.userId,
-            },
-          },
-        },
-        include: {
-          participants: true,
-        },
-      });
+    if (room.users.length > 1) {
+      room.users = [
+        ...room.users.slice(0, currentUserIdx),
+        ...room.users.slice(currentUserIdx + 1),
+      ];
 
-      if (updatedRoom.participants.length === 0) {
-        await this.prisma.room.delete({
-          where: { id: args.roomId },
-        });
-      }
-
-      this.eventEmitter.emit('room.updated');
-      this.eventEmitter.emit('rom.updated', updatedRoom);
-
-      return updatedRoom;
-    } catch (error) {
-      throw error;
+      updatedRoom = await room.save();
+    } else {
+      await room.remove();
     }
+
+    this.eventEmitter.emit('room.updated');
+    this.eventEmitter.emit('room.updated', updatedRoom);
+
+    return updatedRoom;
   }
 
   @OnEvent('removeUserFromRoomIfExist')
   private async removeUserFromRoomIfExist(args: { userId: string }) {
-    const roomsWithUser = await this.prisma.room.findFirst({
-      where: {
-        participants: {
-          some: {
-            id: args.userId,
-          },
-        },
-      },
-    });
+    const user = await this.userRepository.findOneBy({ id: args.userId });
 
-    if (roomsWithUser) {
+    if (user.room) {
       await this.removeUserFromRoom({
-        roomId: roomsWithUser.id,
+        roomId: user.room.id,
         userId: args.userId,
       });
     }

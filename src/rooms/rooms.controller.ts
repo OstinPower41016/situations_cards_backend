@@ -24,7 +24,8 @@ export class RoomsController {
     @Body() body: IRoomCreateDto,
   ) {
     const room = await this.roomsService.create(request, body);
-    return room;
+
+    response.json(room);
   }
 
   @Patch(':roomId/add-user')

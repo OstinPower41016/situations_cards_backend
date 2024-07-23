@@ -1,5 +1,4 @@
 import {
-  OnGatewayConnection,
   OnGatewayDisconnect,
   OnGatewayInit,
   SubscribeMessage,
@@ -7,15 +6,12 @@ import {
   WebSocketServer,
 } from '@nestjs/websockets';
 import { Server, Socket } from 'socket.io';
-import { PrismaService } from 'src/prisma/prisma.service';
 import { OnEvent } from '@nestjs/event-emitter';
-import {
-  RoomCreatedEvent,
-  RoomUpdatedEvent,
-} from './events/roomsCreated.event';
+import { RoomCreatedEvent } from './events/roomsCreated.event';
 import { UserService } from 'src/user/user.service';
 import { RoomsService } from './rooms.service';
 import * as cookie from 'cookie';
+import { InternalServerErrorException } from '@nestjs/common';
 
 @WebSocketGateway({
   cors: true,
@@ -24,7 +20,6 @@ export class RoomsGateway implements OnGatewayInit, OnGatewayDisconnect {
   @WebSocketServer() server: Server;
 
   constructor(
-    private prisma: PrismaService,
     private readonly roomService: RoomsService,
     private readonly userService: UserService,
   ) {}
@@ -55,25 +50,24 @@ export class RoomsGateway implements OnGatewayInit, OnGatewayDisconnect {
 
   @OnEvent('room.created')
   async handleRoomCreated(event: RoomCreatedEvent) {
-    const rooms = await this.prisma.room.findMany({
-      include: {
-        participants: true,
-      },
-    });
+    const rooms = await this.roomService.getAll();
     this.server.emit('rooms', rooms);
   }
 
-  @OnEvent('room.updated') // TODO
+  @OnEvent('room.updated')
   async handleUpdatedRoom(event: any) {
-    const rooms = await this.prisma.room.findMany({
-      include: {
-        participants: true,
-      },
-    });
+    const rooms = await this.roomService.getAll();
     this.server.emit('rooms', rooms);
+  }
 
-    if (event) {
-      this.server.emit(`room/${event.id}`, event);
+  @OnEvent('userInRoom.updated')
+  async handleUserInRoomUpdated(event: { roomId: string }) {
+    if (event.roomId) {
+      const room = await this.roomService.getById({ roomId: event.roomId });
+      this.server.emit(`room/${event.roomId}`, room);
+    } else {
+      throw new InternalServerErrorException();
     }
+    return;
   }
 }
