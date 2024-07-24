@@ -6,6 +6,7 @@ import { AnswerDto } from 'src/dto/answer.dto';
 import { UserGameEntity } from 'src/user/entities/userGame.entity';
 import { GameStage } from 'db/allTypes';
 import { AnswerEntity } from 'src/entities/answer.entity';
+import { UserEntity } from 'src/user/entities/user.entity';
 
 @Entity('games')
 export class GameEntity extends CustomBaseEntity {
@@ -28,6 +29,14 @@ export class GameEntity extends CustomBaseEntity {
 
   @OneToMany(() => AnswerEntity, (answer) => answer.game)
   selectedAnswers: AnswerEntity[];
+
+  @OneToOne(() => AnswerEntity)
+  @JoinColumn()
+  winnerAnswer: AnswerEntity;
+
+  @OneToOne(() => UserGameEntity)
+  @JoinColumn()
+  winner: UserGameEntity;
 
   @OneToMany(() => UserGameEntity, (userGame) => userGame.game, {
     cascade: true,

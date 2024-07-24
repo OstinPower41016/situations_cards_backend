@@ -41,4 +41,17 @@ export class GameController {
       roomId: body.roomId,
     });
   }
+
+  @Patch('select-best-answer')
+  async selectBestAnswer(
+    @Req() request: Request,
+    @Body() body: GameSelectAnswerDto,
+  ) {
+    const userId = request.cookies['_id'];
+    await this.gameService.selectBestAnswer({
+      answerId: body.answerId,
+      userId: userId,
+      roomId: body.roomId,
+    });
+  }
 }

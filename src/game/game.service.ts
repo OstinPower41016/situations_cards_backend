@@ -105,6 +105,8 @@ export class GameService {
         'selectedQuestion',
         'selectedAnswers',
         'room',
+        'winner',
+        'winnerAnswer',
       ],
     });
 
@@ -257,8 +259,52 @@ export class GameService {
     this.eventEmutter.emit('userGame.updated', { userId: args.userId });
   }
 
-  async selectBestAnswer(args: { questionId: string }) {
-    
+  async selectBestAnswer(args: {
+    answerId: string;
+    roomId: string;
+    userId: string;
+  }) {
+    const currentGame = await this.gameRepository.findOne({
+      where: { room: { id: args.roomId } },
+      relations: ['selectedAnswers', 'usersGame', 'usersGame.answers', 'room'],
+    });
+
+    if (currentGame.stage === GameStage.ROUND_RESULTS) {
+      throw new BadRequestException('Раунд уже закончен');
+    }
+
+    const setWinnerQuestionAndUser = () => {
+      currentGame.winnerAnswer = currentGame.selectedAnswers.find(
+        (answer) => answer.id === args.answerId,
+      );
+
+      const usersGameAnswersIds = currentGame.usersGame.flatMap((ug) => ({
+        user: ug,
+        answersIds: ug.answers.map((answer) => answer.id),
+      }));
+
+      const winnerUser = usersGameAnswersIds.find((user) =>
+        user.answersIds.includes(args.answerId),
+      );
+      currentGame.winner = winnerUser.user;
+    };
+
+    const updateStatusesAndScore = () => {
+      currentGame.stage = GameStage.ROUND_RESULTS;
+      for (const userGame of currentGame.usersGame) {
+        userGame.status = GameUserStatus.READY;
+        if (currentGame.winner.id === userGame.id) {
+          userGame.score += 1;
+        }
+      }
+    };
+
+    setWinnerQuestionAndUser();
+    updateStatusesAndScore();
+
+    await currentGame.save();
+    this.eventEmutter.emit('game.updated', { roomId: currentGame.room.id });
+    this.eventEmutter.emit('userGame.updated', { userId: args.userId });
   }
 
   private async getRandomGameAnswer(args: { roomId: string; count?: number }) {

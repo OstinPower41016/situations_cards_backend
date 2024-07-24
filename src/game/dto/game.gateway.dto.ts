@@ -15,11 +15,13 @@ export class GameCommonFieldsDto {
     userId: string;
     nickname: string;
     isLeader: boolean;
-    scrore: number;
+    score: number;
     status: GameUserStatus;
   }[];
   selectedQuestion: QuestionEntity;
   selectedAnswers: AnswerEntity[];
+  winner: UserGameEntity;
+  winnerAnswer: AnswerEntity;
 
   constructor(game: GameEntity) {
     this.id = game.id;
@@ -28,14 +30,18 @@ export class GameCommonFieldsDto {
     this.stage = game.stage;
     this.selectedQuestion = game.selectedQuestion;
     this.selectedAnswers = game.selectedAnswers;
-    this.usersGame = game.usersGame.map((userGame) => ({
-      id: userGame.id,
-      userId: userGame.user.id,
-      nickname: userGame.user.nickname,
-      isLeader: userGame.isLeader,
-      scrore: userGame.score,
-      status: userGame.status,
-    }));
+    this.winner = game.winner;
+    this.winnerAnswer = game.winnerAnswer;
+    this.usersGame = game.usersGame
+      .map((userGame) => ({
+        id: userGame.id,
+        userId: userGame.user.id,
+        nickname: userGame.user.nickname,
+        isLeader: userGame.isLeader,
+        score: userGame.score,
+        status: userGame.status,
+      }))
+      .sort((a, b) => b.score - a.score);
   }
 }
 
