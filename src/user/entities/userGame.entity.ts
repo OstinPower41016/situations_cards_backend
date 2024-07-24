@@ -3,6 +3,7 @@ import {
   BaseEntity,
   Column,
   Entity,
+  JoinColumn,
   ManyToOne,
   OneToMany,
   OneToOne,
@@ -22,6 +23,10 @@ export class UserGameEntity extends CustomBaseEntity {
 
   @OneToMany(() => AnswerEntity, (answer) => answer.gameUser)
   answers: AnswerEntity[];
+
+  @OneToOne(() => AnswerEntity)
+  @JoinColumn()
+  selectedAnswer: AnswerEntity;
 
   @Column({ default: 0 })
   score: number;

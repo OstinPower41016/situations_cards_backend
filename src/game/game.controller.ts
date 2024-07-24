@@ -1,6 +1,7 @@
 import { Body, Controller, Patch, Post, Req, Res } from '@nestjs/common';
 import {
   CreateGameBodyDto,
+  GameSelectAnswerDto,
   UpdateGameSelectQuestion,
 } from './dto/game.controller.dto';
 import { Response, Request } from 'express';
@@ -16,7 +17,7 @@ export class GameController {
   }
 
   @Patch('select-question')
-  async updateSelectQuestion(
+  async selectQuestion(
     @Req() request: Request,
     @Body() body: UpdateGameSelectQuestion,
   ) {
@@ -25,6 +26,19 @@ export class GameController {
       roomId: body.roomId,
       questionId: body.questionId,
       userId: userId,
+    });
+  }
+
+  @Patch('select-answer')
+  async selectAnswer(
+    @Req() request: Request,
+    @Body() body: GameSelectAnswerDto,
+  ) {
+    const userId = request.cookies['_id'];
+    await this.gameService.selectAnswer({
+      answerId: body.answerId,
+      userId: userId,
+      roomId: body.roomId,
     });
   }
 }

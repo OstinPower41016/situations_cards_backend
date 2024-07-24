@@ -40,7 +40,7 @@ export class RoomsGateway implements OnGatewayInit, OnGatewayDisconnect {
     client.emit('rooms', rooms);
   }
 
-  @SubscribeMessage('room')
+  @SubscribeMessage('joinToRoom')
   async getRoom(client: Socket, data: { roomId: string }) {
     if (data.roomId) {
       const room = await this.roomService.getById({ roomId: data.roomId });

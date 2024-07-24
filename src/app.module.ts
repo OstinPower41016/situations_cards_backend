@@ -7,13 +7,14 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { dataSourceOptions } from 'db/data-source';
 import { GameModule } from './game/game.module';
 import { CacheModule } from '@nestjs/cache-manager';
+import { RedisModule } from './redis/redis.module';
 
 @Module({
   providers: [],
   controllers: [],
   exports: [],
   imports: [
-    CacheModule.register({ isGlobal: true }),
+    RedisModule,
     TypeOrmModule.forRoot(dataSourceOptions),
     EventEmitterModule.forRoot(),
     RoomsModule,

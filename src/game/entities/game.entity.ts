@@ -4,12 +4,8 @@ import { Column, Entity, JoinColumn, OneToMany, OneToOne } from 'typeorm';
 import { QuestionEntity } from 'src/entities/question.entity';
 import { AnswerDto } from 'src/dto/answer.dto';
 import { UserGameEntity } from 'src/user/entities/userGame.entity';
-
-export enum GameStage {
-  'SELECT_QUESTION' = 'SELECT_QUESTION',
-  'SELECT_ANSWERS' = 'SELECT_ANSWERS',
-  'ROUND_RESULTS' = 'ROUND_RESULTS',
-}
+import { GameStage } from 'db/allTypes';
+import { AnswerEntity } from 'src/entities/answer.entity';
 
 @Entity('games')
 export class GameEntity extends CustomBaseEntity {
@@ -29,6 +25,9 @@ export class GameEntity extends CustomBaseEntity {
   @OneToOne(() => QuestionEntity)
   @JoinColumn()
   selectedQuestion: QuestionEntity;
+
+  @OneToMany(() => AnswerEntity, (answer) => answer.game)
+  selectedAnswers: AnswerEntity[];
 
   @OneToMany(() => UserGameEntity, (userGame) => userGame.game, {
     cascade: true,

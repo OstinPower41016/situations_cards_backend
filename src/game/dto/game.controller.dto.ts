@@ -12,3 +12,11 @@ export class UpdateGameSelectQuestion {
   @IsUUID()
   readonly roomId: string;
 }
+
+export class GameSelectAnswerDto {
+  @IsUUID()
+  readonly answerId: string;
+
+  @IsUUID()
+  readonly roomId: string;
+}

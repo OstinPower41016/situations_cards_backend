@@ -18,23 +18,19 @@ export class GameGateway {
 
   constructor(private readonly gameService: GameService) {}
 
-  @OnEvent('game.created')
-  @OnEvent('game.updated')
   @SubscribeMessage('joinGame')
-  async handleUserInRoomUpdated(client: Socket, payload: { gameId: string }) {
-    if (payload.gameId) {
-      const game = await this.gameService.getCommonFieldsGameById({
-        gameId: payload.gameId,
+  async handleUserInRoomUpdated(client: Socket, payload: { roomId: string }) {
+    if (payload.roomId) {
+      const game = await this.gameService.getCommonFieldsGameByRoomId({
+        roomId: payload.roomId,
       });
 
-      this.server.emit(`game/${game.id}`, new GameCommonFieldsDto(game));
+      client.emit(`game/${game.room.id}`, new GameCommonFieldsDto(game));
     } else {
       throw new InternalServerErrorException('gameId is empty');
     }
   }
 
-  @OnEvent('userGame.created')
-  @OnEvent('userGame.updated')
   @SubscribeMessage('joinUserToGame')
   async getUserGame(client: Socket) {
     const cookies = client.handshake.headers.cookie;
@@ -46,7 +42,38 @@ export class GameGateway {
     });
 
     if (userGame) {
-      this.server.emit(`game/userGame/${userId}`, new UserGameDto(userGame));
+      client.emit(`game/userGame/${userId}`, new UserGameDto(userGame));
+    }
+  }
+
+  @OnEvent('game.created')
+  @OnEvent('game.updated')
+  async handleGameUpdated(event: { roomId: string }) {
+    if (event.roomId) {
+      const game = await this.gameService.getCommonFieldsGameByRoomId({
+        roomId: event.roomId,
+      });
+
+      this.server.emit(`game/${game.room.id}`, new GameCommonFieldsDto(game));
+    } else {
+      throw new InternalServerErrorException('gameId is empty');
+    }
+  }
+
+  @OnEvent('userGame.created')
+  @OnEvent('userGame.updated')
+  async handleUserGameUpdated(event: { userId: string }) {
+    const userGame = await this.gameService.getUserGameByUserId({
+      userId: event.userId,
+    });
+
+    if (userGame) {
+      this.server.emit(
+        `game/userGame/${event.userId}`,
+        new UserGameDto(userGame),
+      );
+    } else {
+      throw new InternalServerErrorException('userId is empty');
     }
   }
 }
