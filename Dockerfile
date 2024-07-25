@@ -1,7 +1,8 @@
 FROM node:20
 
-WORKDIR /src
-COPY . .
+WORKDIR /app
+COPY yarn.lock ./
 RUN yarn
+COPY . .
 EXPOSE 3000
-CMD ["node", "app.js"]
+CMD ["node", "dist/main.js"]
