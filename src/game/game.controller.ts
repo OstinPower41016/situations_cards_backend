@@ -1,6 +1,7 @@
 import { Body, Controller, Patch, Post, Req, Res } from '@nestjs/common';
 import {
   CreateGameBodyDto,
+  GameNextRoundDto,
   GameSelectAnswerDto,
   UpdateGameSelectQuestion,
 } from './dto/game.controller.dto';
@@ -52,6 +53,13 @@ export class GameController {
       answerId: body.answerId,
       userId: userId,
       roomId: body.roomId,
+    });
+  }
+
+  @Patch('next-round')
+  async nextRound(@Body() body: GameNextRoundDto) {
+    await this.gameService.nextRound({
+      gameId: body.gameId,
     });
   }
 }

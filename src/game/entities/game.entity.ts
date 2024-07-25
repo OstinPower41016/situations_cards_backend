@@ -34,14 +34,16 @@ export class GameEntity extends CustomBaseEntity {
   @JoinColumn()
   winnerAnswer: AnswerEntity;
 
-  @OneToOne(() => UserGameEntity)
-  @JoinColumn()
-  winner: UserGameEntity;
-
   @OneToMany(() => UserGameEntity, (userGame) => userGame.game, {
     cascade: true,
   })
   usersGame: UserGameEntity[];
+
+  @Column({
+    type: 'uuid',
+    nullable: true,
+  })
+  winnerUserGameId: string;
 
   @OneToOne(() => RoomEntity, (room) => room.game)
   @JoinColumn()

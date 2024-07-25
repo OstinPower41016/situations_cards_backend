@@ -20,3 +20,8 @@ export class GameSelectAnswerDto {
   @IsUUID()
   readonly roomId: string;
 }
+
+export class GameNextRoundDto {
+  @IsUUID()
+  readonly gameId: string;
+}

@@ -1,4 +1,9 @@
-import { BadRequestException, Inject, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Inject,
+  Injectable,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { RoomsService } from 'src/rooms/rooms.service';
 import { GameEntity } from './entities/game.entity';
@@ -29,8 +34,6 @@ export class GameService {
     private readonly answerRepository: typeof AnswerEntity,
     @InjectRepository(QuestionEntity)
     private readonly questionRepository: typeof QuestionEntity,
-    @InjectRepository(UserGameEntity)
-    private readonly userRepository: typeof UserEntity,
 
     private readonly eventEmutter: EventEmitter2,
 
@@ -91,6 +94,87 @@ export class GameService {
     this.eventEmutter.emit('game.created', { roomId: room.id });
   }
 
+  async nextRound(args: { gameId: string }) {
+    const currentGame = await this.gameRepository.findOne({
+      where: { id: args.gameId },
+      relations: [
+        'room',
+        'usersGame',
+        'usersGame.selectedAnswer',
+        'usersGame.answers',
+      ],
+    });
+
+    const setNewLeader = () => {
+      const currentLeaderIdx = currentGame.usersGame.findIndex(
+        (ug) => ug.isLeader,
+      );
+      const isLastLeaderInList =
+        currentGame.usersGame.length === currentLeaderIdx + 1;
+
+      currentGame.usersGame[currentLeaderIdx].isLeader = false;
+
+      if (isLastLeaderInList) {
+        currentGame.usersGame[0].isLeader = true;
+      } else {
+        currentGame.usersGame[currentLeaderIdx + 1].isLeader = true;
+      }
+    };
+
+    const updateUsersGame = async () => {
+      let i = 0;
+      for await (const userGame of currentGame.usersGame) {
+        if (userGame.selectedAnswer) {
+          const newAnswers = await this.getRandomGameAnswers({
+            roomId: currentGame.room.id,
+          });
+          const newAnswer = newAnswers[0];
+
+          const selectedAnswerIdx = userGame.answers.findIndex(
+            (answer) => answer.id === userGame.selectedAnswer.id,
+          );
+
+          if (selectedAnswerIdx === -1) {
+            throw new InternalServerErrorException();
+          }
+
+          currentGame.usersGame[i].answers = userGame.answers;
+          currentGame.usersGame[i].selectedAnswer = null;
+
+          userGame.answers.splice(selectedAnswerIdx, 1, newAnswer);
+        }
+
+        if (userGame.isLeader) {
+          currentGame.usersGame[i].status = GameUserStatus.CHOOSING_QUESTION;
+        } else {
+          currentGame.usersGame[i].status = GameUserStatus.WAITING;
+        }
+        i++;
+      }
+    };
+
+    const setNewQuestions = async () => {
+      const newRandomQuestions = await this.getRandomRoomGameQuestions({
+        roomId: currentGame.room.id,
+      });
+      currentGame.questions = newRandomQuestions;
+    };
+
+    setNewLeader();
+    await updateUsersGame();
+    await setNewQuestions();
+    currentGame.round += 1;
+    currentGame.stage = GameStage.SELECT_QUESTION;
+    currentGame.selectedAnswers = null;
+    currentGame.selectedQuestion = null;
+    currentGame.winnerUserGameId = null;
+    currentGame.winnerAnswer = null;
+
+    await currentGame.save();
+
+    this.eventEmutter.emit('game.updated', { roomId: currentGame.room.id });
+  }
+
   async getCommonFieldsGameByRoomId(args: { roomId: string }) {
     const game = await this.gameRepository.findOne({
       where: {
@@ -105,7 +189,6 @@ export class GameService {
         'selectedQuestion',
         'selectedAnswers',
         'room',
-        'winner',
         'winnerAnswer',
       ],
     });
@@ -119,8 +202,6 @@ export class GameService {
       relations: ['user', 'answers', 'selectedAnswer', 'game'],
     });
 
-    const userGames = await this.userGameRepository.find();
-
     return userGame;
   }
 
@@ -129,10 +210,6 @@ export class GameService {
     roomId: string;
     userId: string;
   }) {
-    const questions = await this.cacheManager.get<QuestionEntity[]>(
-      getQuestionsStorageCacheKey(args.roomId),
-    );
-
     const currentGame = await this.gameRepository.findOne({
       where: {
         room: {
@@ -193,23 +270,27 @@ export class GameService {
       );
     }
 
-    const userGame = await this.userGameRepository.findOne({
-      where: { user: { id: args.userId } },
-      relations: ['answers'],
-    });
+    const selectUserGameAnswer = async () => {
+      const selectedUserGameIdx = currentGame.usersGame.findIndex(
+        (user) => user.user.id === args.userId,
+      );
+      const selectedAnswerIdx = currentGame.usersGame[
+        selectedUserGameIdx
+      ].answers.findIndex((answer) => answer.id === args.answerId);
 
-    const selectAnswer = async () => {
-      const selectedAnswer = currentGame.usersGame
-        .find((user) => user.user.id === args.userId)
-        .answers.find((answer) => answer.id === args.answerId);
-
-      userGame.selectedAnswer = selectedAnswer;
+      currentGame.usersGame[selectedUserGameIdx].selectedAnswer =
+        currentGame.usersGame[selectedUserGameIdx].answers[selectedAnswerIdx];
+      currentGame.usersGame[selectedUserGameIdx].status = GameUserStatus.READY;
     };
 
     const checkAndUpdateGameStatus = async () => {
+      const currentUserGame = currentGame.usersGame.find(
+        (ug) => ug.user.id === args.userId,
+      );
+
       const otherPersonUsersGameWithoutLeader = currentGame.usersGame.filter(
         (currUserGame) =>
-          currUserGame.id !== userGame.id && !currUserGame.isLeader,
+          currUserGame.id !== currentUserGame.id && !currUserGame.isLeader,
       );
 
       const areAllUsersReady = otherPersonUsersGameWithoutLeader.every(
@@ -219,18 +300,6 @@ export class GameService {
       if (areAllUsersReady) {
         currentGame.stage = GameStage.SELECT_BEST_ANSWER;
 
-        const leaderUserGame = currentGame.usersGame.find((ug) => ug.isLeader);
-
-        const userGames = [
-          ...otherPersonUsersGameWithoutLeader,
-          leaderUserGame,
-          userGame,
-        ];
-
-        const selectedAnswers = userGames.map(
-          (userGame) => userGame.selectedAnswer,
-        );
-
         for (const userGame of currentGame.usersGame) {
           if (userGame.isLeader) {
             userGame.status = GameUserStatus.CHOOSING_BEST_ANSWER;
@@ -239,21 +308,18 @@ export class GameService {
           }
         }
 
-        currentGame.selectedAnswers = shuffle(selectedAnswers);
-        await currentGame.save();
+        currentGame.selectedAnswers = currentGame.usersGame
+          .map((ug) => ug.selectedAnswer)
+          .filter((selectedAnswer) => selectedAnswer);
       }
 
       return { areAllUsersReady };
     };
 
-    await selectAnswer();
+    await selectUserGameAnswer();
     const { areAllUsersReady } = await checkAndUpdateGameStatus();
 
-    if (!areAllUsersReady) {
-      userGame.status = GameUserStatus.READY;
-    }
-
-    await userGame.save();
+    await currentGame.save();
 
     this.eventEmutter.emit('game.updated', { roomId: currentGame.room.id });
     this.eventEmutter.emit('userGame.updated', { userId: args.userId });
@@ -286,14 +352,14 @@ export class GameService {
       const winnerUser = usersGameAnswersIds.find((user) =>
         user.answersIds.includes(args.answerId),
       );
-      currentGame.winner = winnerUser.user;
+      currentGame.winnerUserGameId = winnerUser.user.id;
     };
 
     const updateStatusesAndScore = () => {
       currentGame.stage = GameStage.ROUND_RESULTS;
       for (const userGame of currentGame.usersGame) {
         userGame.status = GameUserStatus.READY;
-        if (currentGame.winner.id === userGame.id) {
+        if (currentGame.winnerUserGameId === userGame.id) {
           userGame.score += 1;
         }
       }
@@ -307,17 +373,19 @@ export class GameService {
     this.eventEmutter.emit('userGame.updated', { userId: args.userId });
   }
 
-  private async getRandomGameAnswer(args: { roomId: string; count?: number }) {
+  private async getRandomGameAnswers(args: { roomId: string; count?: number }) {
     const { count = 1 } = args;
 
-    const items = await this.cacheManager.get<QuestionEntity[]>(
-      getQuestionsStorageCacheKey(args.roomId),
+    const items = await this.cacheManager.get<AnswerEntity[]>(
+      getAnswersStorageCacheKey(args.roomId),
     );
-    const randomItems: QuestionEntity[] = getRandomElements(items, count);
-    const randomItemsIds = randomItems.map((question) => question.id);
-    const itemsWithoutSelected = randomItems.filter(
-      (question) => !randomItemsIds.includes(question.id),
+
+    const randomItems: AnswerEntity[] = getRandomElements(items, count);
+    const randomItemsIds = randomItems.map((item) => item.id);
+    const itemsWithoutSelected = items.filter(
+      (item) => !randomItemsIds.includes(item.id),
     );
+
     await this.cacheManager.set(
       getAnswersStorageCacheKey(args.roomId),
       itemsWithoutSelected,

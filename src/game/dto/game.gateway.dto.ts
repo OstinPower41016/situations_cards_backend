@@ -4,6 +4,7 @@ import { QuestionEntity } from 'src/entities/question.entity';
 import { UserGameEntity } from 'src/user/entities/userGame.entity';
 import { AnswerEntity } from 'src/entities/answer.entity';
 import { GameStage, GameUserStatus } from 'db/allTypes';
+import shuffle from 'src/utils/shuffle';
 
 export class GameCommonFieldsDto {
   id: string;
@@ -20,7 +21,7 @@ export class GameCommonFieldsDto {
   }[];
   selectedQuestion: QuestionEntity;
   selectedAnswers: AnswerEntity[];
-  winner: UserGameEntity;
+  winnerUserGameId: string;
   winnerAnswer: AnswerEntity;
 
   constructor(game: GameEntity) {
@@ -29,8 +30,10 @@ export class GameCommonFieldsDto {
     this.round = game.round;
     this.stage = game.stage;
     this.selectedQuestion = game.selectedQuestion;
-    this.selectedAnswers = game.selectedAnswers;
-    this.winner = game.winner;
+    this.selectedAnswers = game.selectedAnswers
+      ? shuffle(game.selectedAnswers)
+      : null;
+    this.winnerUserGameId = game.winnerUserGameId;
     this.winnerAnswer = game.winnerAnswer;
     this.usersGame = game.usersGame
       .map((userGame) => ({
