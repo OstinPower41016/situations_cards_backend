@@ -1,3 +1,4 @@
-import { User } from '@prisma/client';
+import { UserEntity } from 'src/user/entities/user.entity';
 
-export interface IUserUpdateDto extends Pick<User, 'nickname' | 'status'> {}
+export interface IUserUpdateDto
+  extends Pick<UserEntity, 'nickname' | 'status'> {}

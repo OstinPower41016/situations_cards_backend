@@ -6,7 +6,6 @@ import {
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
-import { RoomStatus, User } from '@prisma/client';
 import { Request, Response } from 'express';
 import {
   uniqueUsernameGenerator,
@@ -15,6 +14,7 @@ import {
 } from 'unique-username-generator';
 import { UserEntity, UserStatus } from './entities/user.entity';
 import { UserDto } from './dto/user.dto';
+import { RoomStatus } from 'db/allTypes';
 
 @Injectable()
 export class UserService {

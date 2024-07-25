@@ -1,6 +1,6 @@
-import { Room } from '@prisma/client';
+import { RoomEntity } from 'src/rooms/entity/room.entity';
 
-export interface IRoomCreateDto extends Pick<Room, 'name' | 'private'> {}
+export interface IRoomCreateDto extends Pick<RoomEntity, 'name' | 'private'> {}
 
 export interface IRoomStartGame {
   roomId: string;
