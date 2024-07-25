@@ -22,7 +22,7 @@ services:
     restart: always
 
   app:
-    build: ./app
+    build: ../
     volumes:
       - ./app:/usr/src/app
     ports:
