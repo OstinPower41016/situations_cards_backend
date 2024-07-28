@@ -12,6 +12,8 @@ import { GameCommonFieldsDto, UserGameDto } from './dto/game.gateway.dto';
 
 @WebSocketGateway({
   cors: true,
+  path: '/ws',
+  transports: 'websocket',
 })
 export class GameGateway {
   @WebSocketServer() server: Server;

@@ -15,6 +15,8 @@ import { InternalServerErrorException } from '@nestjs/common';
 
 @WebSocketGateway({
   cors: true,
+  path: '/ws',
+  transports: 'websocket',
 })
 export class RoomsGateway implements OnGatewayInit, OnGatewayDisconnect {
   @WebSocketServer() server: Server;
