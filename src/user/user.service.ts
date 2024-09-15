@@ -1,8 +1,10 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   InternalServerErrorException,
   Req,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -13,8 +15,10 @@ import {
   adjectives,
 } from 'unique-username-generator';
 import { UserEntity, UserStatus } from './entities/user.entity';
-import { UserDto } from './dto/user.dto';
+import { UserDto, UserInfoDto } from './dto/user.dto';
 import { RoomStatus } from 'db/allTypes';
+import { GoogleUserDto } from 'src/auth/dto/googleUser.dto';
+import { UserGuestCreateBody } from 'src/auth/dto/auth.dto';
 
 @Injectable()
 export class UserService {
@@ -27,28 +31,31 @@ export class UserService {
   async getUserMe(request: Request, response: Response) {
     const _id = request.cookies['_id'];
 
-    const createNewUser = async () => {
-      const newUser = await this.createGuest();
-      response.cookie('_id', newUser.id, {
-        httpOnly: true,
-        secure: false,
-      });
-      return newUser;
-    };
-
     if (_id) {
-      const user = await this.getUserById(_id);
-
-      if (!user) {
-        const newUser = await createNewUser();
-        return newUser;
-      }
-
-      return new UserDto(user);
-    } else {
-      const newUser = await createNewUser();
-      return newUser;
+      throw new UnauthorizedException('User is unauthorized');
     }
+
+    const user = await this.getUserById(_id);
+
+    return new UserDto(user); // TODO UserDto ?
+  }
+
+  async getOrCreateUserByEmail(user: GoogleUserDto) {
+    if (!user) {
+      throw new InternalServerErrorException('User is empty');
+    }
+
+    const currentUser = await this.userRepository.findOne({
+      where: { email: user.email },
+    });
+
+    if (currentUser) {
+      return new UserInfoDto(currentUser);
+    }
+
+    const newUser = await this.createUser(user);
+
+    return new UserInfoDto(newUser);
   }
 
   async updateUser(userId: string, data: UserEntity) {
@@ -135,14 +142,54 @@ export class UserService {
     // }
   }
 
-  private async createGuest() {
-    const user = new UserEntity();
-    user.nickname = uniqueUsernameGenerator({
-      dictionaries: [nouns, adjectives],
-    });
-    user.guest = true;
+  async createGuest(user: UserGuestCreateBody) {
+    const isNickNameAlreadyExist = this.isNicknameAlreadyExist(user.nickname);
+    if (isNickNameAlreadyExist) {
+      throw new BadRequestException('This nickname already exist');
+    }
 
-    const userData = await user.save();
+    const newUser = new UserEntity();
+    newUser.nickname = user.nickname;
+    newUser.guest = true;
+
+    const userData = await newUser.save();
+    return userData;
+  }
+
+  async generateUserNickName() {
+    const getNewNickname = async (): Promise<string> => {
+      const nickname = uniqueUsernameGenerator({
+        dictionaries: [nouns, adjectives],
+      });
+
+      const isNickNameAlreadyExist =
+        await this.isNicknameAlreadyExist(nickname);
+
+      if (isNickNameAlreadyExist) {
+        return getNewNickname();
+      }
+      return nickname;
+    };
+
+    const nickname = await getNewNickname();
+
+    return nickname;
+  }
+
+  private async isNicknameAlreadyExist(nickname: string) {
+    const isNickNameAlreadyExist = await this.userRepository.find({
+      where: { nickname: nickname },
+    });
+
+    return !!isNickNameAlreadyExist.length;
+  }
+
+  private async createUser(user: GoogleUserDto) {
+    const newUser = new UserEntity();
+    newUser.guest = false;
+    newUser.email = user.email;
+    newUser.nickname = user.email.split('@')[0];
+    const userData = await newUser.save();
     return userData;
   }
 }

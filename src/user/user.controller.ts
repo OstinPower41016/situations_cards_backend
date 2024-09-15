@@ -13,6 +13,12 @@ export class UserController {
     response.json(user);
   }
 
+  @Get('/generate-nickname')
+  async generateNickname() {
+    const nickname = await this.userService.generateUserNickName();
+    return nickname;
+  }
+
   @Patch('/me/update')
   async updateUserNickname(
     @Req() request: Request,

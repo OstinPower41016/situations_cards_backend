@@ -40,4 +40,7 @@ export class UserEntity extends CustomBaseEntity {
 
   @ManyToOne(() => RoomEntity, (room) => room.users)
   room: RoomEntity;
+
+  @Column({ default: null })
+  email: string;
 }

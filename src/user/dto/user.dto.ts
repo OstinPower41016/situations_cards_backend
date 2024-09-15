@@ -15,8 +15,22 @@ export class UserDto {
   constructor(user: UserEntity) {
     this.id = user.id;
     this.nickname = user.nickname;
-    this.guest = true;
+    this.guest = user.guest;
     this.status = user.status;
     this.room = user.room;
+  }
+}
+
+export class UserInfoDto {
+  id: string;
+  nickname: string;
+  guest: boolean;
+  status: keyof typeof UserStatus;
+
+  constructor(user: UserEntity) {
+    this.id = user.id;
+    this.nickname = user.nickname;
+    this.guest = true;
+    this.status = user.status;
   }
 }

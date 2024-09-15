@@ -8,6 +8,7 @@ import { dataSourceOptions } from 'db/data-source';
 import { GameModule } from './game/game.module';
 import { CacheModule } from '@nestjs/cache-manager';
 import { RedisModule } from './redis/redis.module';
+import { AuthModule } from './auth/auth.module';
 
 @Module({
   providers: [],
@@ -17,6 +18,7 @@ import { RedisModule } from './redis/redis.module';
     RedisModule,
     TypeOrmModule.forRoot(dataSourceOptions),
     EventEmitterModule.forRoot(),
+    AuthModule,
     RoomsModule,
     UserModule,
     GameModule,
