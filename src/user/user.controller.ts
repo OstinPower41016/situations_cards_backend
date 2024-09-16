@@ -26,7 +26,7 @@ export class UserController {
     @Body() body: IUserUpdateDto,
   ) {
     const _id = request.cookies['_id'];
-    const updatedUser = await this.userService.updateUser(_id, body as any);
+    const updatedUser = await this.userService.updateUser(_id, body);
     response.json(updatedUser);
   }
 }

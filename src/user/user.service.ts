@@ -19,6 +19,7 @@ import { UserDto, UserInfoDto } from './dto/user.dto';
 import { RoomStatus } from 'db/allTypes';
 import { GoogleUserDto } from 'src/auth/dto/googleUser.dto';
 import { UserGuestCreateBody } from 'src/auth/dto/auth.dto';
+import { IUserUpdateDto } from 'src/dto/user.dto';
 
 @Injectable()
 export class UserService {
@@ -58,50 +59,46 @@ export class UserService {
     return new UserInfoDto(newUser);
   }
 
-  async updateUser(userId: string, data: UserEntity) {
+  async updateUser(userId: string, data: IUserUpdateDto) {
     if (userId) {
-      try {
-        const user = await this.userRepository.findOne({
-          where: { id: userId },
-          relations: {
-            room: true,
-          },
-        });
+      const user = await this.userRepository.findOne({
+        where: { id: userId },
+        relations: {
+          room: true,
+        },
+      });
 
-        if (!user) {
-          throw new InternalServerErrorException('User not found');
-        }
-
-        user.nickname = data.nickname ?? user.nickname;
-        user.status = data.status ?? user.status;
-
-        if (user.room) {
-          if (
-            user.status === 'OFFLINE' &&
-            user.room.status !== RoomStatus.IN_GAME
-          ) {
-            this.eventEmitter.emit('removeUserFromRoomIfExist', {
-              userId: user.id,
-            });
-            user.room = null;
-          }
-
-          await this.checkAndUpdateRoomStatus({ roomId: user.room.id });
-        }
-
-        const updatedUser = await user.save();
-
-        this.eventEmitter.emit('userInRoom.updated', {
-          roomId: updatedUser.room?.id,
-        });
-        return updatedUser;
-      } catch (error) {
-        if (error.code === 'P2002') {
-          throw new ConflictException('Такой ник уже занят');
-        } else {
-          throw new InternalServerErrorException();
-        }
+      if (!user) {
+        throw new InternalServerErrorException('User not found');
       }
+
+      if (data.nickname) {
+        await this.checkNickname(data.nickname);
+      }
+
+      user.nickname = data.nickname ?? user.nickname;
+      user.status = data.status ?? user.status;
+
+      if (user.room) {
+        if (
+          user.status === 'OFFLINE' &&
+          user.room.status !== RoomStatus.IN_GAME
+        ) {
+          this.eventEmitter.emit('removeUserFromRoomIfExist', {
+            userId: user.id,
+          });
+          user.room = null;
+        }
+
+        await this.checkAndUpdateRoomStatus({ roomId: user.room.id });
+      }
+
+      const updatedUser = await user.save();
+
+      this.eventEmitter.emit('userInRoom.updated', {
+        roomId: updatedUser.room?.id,
+      });
+      return updatedUser;
     } else {
       throw new InternalServerErrorException();
     }
@@ -143,10 +140,7 @@ export class UserService {
   }
 
   async createGuest(user: UserGuestCreateBody) {
-    const isNickNameAlreadyExist = this.isNicknameAlreadyExist(user.nickname);
-    if (isNickNameAlreadyExist) {
-      throw new BadRequestException('This nickname already exist');
-    }
+    await this.checkNickname(user.nickname);
 
     const newUser = new UserEntity();
     newUser.nickname = user.nickname;
@@ -162,12 +156,12 @@ export class UserService {
         dictionaries: [nouns, adjectives],
       });
 
-      const isNickNameAlreadyExist =
-        await this.isNicknameAlreadyExist(nickname);
-
-      if (isNickNameAlreadyExist) {
+      try {
+        await this.checkNickname(nickname);
+      } catch (error) {
         return getNewNickname();
       }
+
       return nickname;
     };
 
@@ -176,10 +170,14 @@ export class UserService {
     return nickname;
   }
 
-  private async isNicknameAlreadyExist(nickname: string) {
+  private async checkNickname(nickname: string) {
     const isNickNameAlreadyExist = await this.userRepository.find({
       where: { nickname: nickname },
     });
+
+    if (isNickNameAlreadyExist.length > 0) {
+      throw new BadRequestException(`Nickname "${nickname}" already exist`);
+    }
 
     return !!isNickNameAlreadyExist.length;
   }
